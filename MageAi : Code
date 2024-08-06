@@ -1,0 +1,166 @@
+DATA LOADER CODE:
+import io
+import pandas as pd
+import requests
+if 'data_loader' not in globals():
+    from mage_ai.data_preparation.decorators import data_loader
+if 'test' not in globals():
+    from mage_ai.data_preparation.decorators import test
+
+
+@data_loader
+def load_data_from_api(*args, **kwargs):
+    """
+    Template for loading data from API
+    """
+    url = 'https://uberdata-miniproject.s3.eu-north-1.amazonaws.com/UberDataset.csv'
+    response = requests.get(url)
+
+    return pd.read_csv(io.StringIO(response.text), sep=',')
+
+
+@test
+def test_output(output, *args) -> None:
+    """
+    Template code for testing the output of the block.
+    """
+    assert output is not None, 'The output is undefined'
+
+
+# DATA TRANSFORMER CODE
+
+Positional arguments for decorated function:
+
+@transformer
+
+def transform(data):
+
+    data → mpldata                                                                                                                                                                                                                   import pandas as pd
+if 'transformer' not in globals():
+    from mage_ai.data_preparation.decorators import transformer
+if 'test' not in globals():
+    from mage_ai.data_preparation.decorators import test
+
+
+@transformer
+def transform(df, *args, **kwargs):
+    """
+    Template code for a transformer block.
+
+    Add more parameters to this function if this block has multiple parent blocks.
+    There should be one parameter for each output variable from each parent block.
+
+    Args:
+        data: The output from the upstream parent block
+        args: The output from any additional upstream blocks (if applicable)
+
+    Returns:
+        Anything (e.g. data frame, dictionary, array, int, str, etc.)
+    """
+    # Specify your transformation logic here
+    df['trip_id'] = df.index 
+    datetime_dim = df[['START_DATE', 'END_DATE']].reset_index(drop=True)
+    datetime_dim['start_hour'] = datetime_dim['START_DATE']
+    datetime_dim['start_day'] = datetime_dim['START_DATE']
+    datetime_dim['start_month'] = datetime_dim['START_DATE']
+    datetime_dim['start_year'] = datetime_dim['START_DATE']
+    datetime_dim['start_weekday'] = datetime_dim['START_DATE']
+
+    datetime_dim['end_hour'] = datetime_dim['END_DATE']
+    datetime_dim['end_day'] = datetime_dim['END_DATE']
+    datetime_dim['end_month'] = datetime_dim['END_DATE']
+    datetime_dim['end_year'] = datetime_dim['END_DATE']
+    datetime_dim['end_weekday'] = datetime_dim['END_DATE']
+
+    datetime_dim['datetime_id'] = datetime_dim.index
+
+    datetime_dim = datetime_dim[['datetime_id', 'START_DATE', 'start_hour', 'start_day', 'start_month', 'start_year', 'start_weekday',
+                                'END_DATE', 'end_hour', 'end_day', 'end_month', 'end_year', 'end_weekday']]
+    
+    category_dim = df[['CATEGORY']].reset_index(drop=True)
+    category_dim['category_id'] = category_dim.index
+    category_dim = category_dim[['category_id', 'CATEGORY']]
+    
+    start_location_dim = df[['START']].reset_index(drop=True)
+    start_location_dim['start_location_id'] = start_location_dim.index
+    start_location_dim = start_location_dim[['start_location_id', 'START']]
+
+    stop_location_dim = df[['STOP']].reset_index(drop=True)
+    stop_location_dim['stop_location_id'] = stop_location_dim.index
+    stop_location_dim = stop_location_dim[['stop_location_id', 'STOP']]
+
+    miles_dim = df[['MILES']].reset_index(drop=True)
+    miles_dim['miles_id'] = miles_dim.index.astype(int)
+    miles_dim = miles_dim[['miles_id', 'MILES']]
+
+    purpose_dim = df[['PURPOSE']].reset_index(drop=True)
+    purpose_dim['purpose_id'] = purpose_dim.index
+    purpose_dim = purpose_dim[['purpose_id', 'PURPOSE']]
+
+    fact_table = df.merge(category_dim, left_on='trip_id', right_on='category_id') \
+               .merge(start_location_dim, left_on='trip_id', right_on='start_location_id') \
+               .merge(stop_location_dim, left_on='trip_id', right_on='stop_location_id') \
+               .merge(miles_dim, left_on='trip_id', right_on='miles_id') \
+               .merge(purpose_dim, left_on='trip_id', right_on='purpose_id') \
+               .merge(datetime_dim, left_on='trip_id', right_on='datetime_id') \
+               [['trip_id', 'datetime_id', 'category_id', 'start_location_id', 'stop_location_id', 'miles_id', 'purpose_id']]
+    
+   result_dict = {
+        "datetime_dim": datetime_dim,
+        "category_dim": category_dim,
+        "start_location_dim": start_location_dim,
+        "stop_location_dim": stop_location_dim,
+        "miles_dim": miles_dim,
+        "purpose_dim": purpose_dim,
+        "fact_table": fact_table
+    }
+
+    print("Result type:", type(result_dict))
+    print("Result keys:", result_dict.keys())
+
+    return result_dict 
+
+@test
+def test_output(output, *args) -> None:
+    """
+    Template code for testing the output of the block.
+    """
+assert output is not None, 'The output is undefined'
+
+# DATA EXPORTER CODE
+
+Positional arguments for decorated function:
+
+@data_exporter
+
+def export_data(data):
+
+    data → datampl                                                                                                                                                                                                                             from mage_ai.settings.repo import get_repo_path
+from mage_ai.io.config import ConfigFileLoader
+from mage_ai.io.redshift import Redshift
+from pandas import DataFrame
+from os import path
+import pandas as pd
+
+if 'data_exporter' not in globals():
+    from mage_ai.data_preparation.decorators import data_exporter
+
+
+def prepare_dataframe_for_redshift(df, table_name):
+    """
+    Prepare the DataFrame for Redshift by converting data types.
+    """
+    for column in df.columns:
+        if df[column].dtype == 'int64':
+            df[column] = df[column].astype('int64')
+        elif df[column].dtype == 'float64':
+            if table_name == 'miles_dim' and column == 'MILES':
+                # Convert MILES to integer if needed
+                df[column] = df[column].round().astype('int64')
+            else:
+                df[column] = df[column].astype('float64')
+        elif pd.api.types.is_datetime64_any_dtype(df[column]):
+            df[column] = df[column].astype('str')
+        elif df[column].dtype == 'object':
+            df[column] = df[column].fillna('')  # Replace NaN with empty string
+    return df
